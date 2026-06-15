@@ -9,9 +9,18 @@ host:
 
 logger:
 
+font:
+  - file: "gfonts://VT323"   # classic CRT / phosphor terminal font
+    id: ui_font
+    size: 26
+    glyphsets: ["GF_Latin_Core"]
+
 globals:
   - id: avatar_phase
     type: int
+    initial_value: '0'
+  - id: phase_t0           # millis() when the phase last changed (drives the demo typing)
+    type: uint32_t
     initial_value: '0'
 
 display:
@@ -21,7 +30,19 @@ display:
       width: 320
       height: 240
     update_interval: 16ms  # ~60fps; smoothness only — animation speed is time-based
-    lambda: 'avatar::render(it, id(avatar_phase), millis());'
+    lambda: |-
+      avatar::render(it, id(avatar_phase), millis());
+      // DEMO text (emulator only) to preview the terminal/phosphor styling.
+      auto phos = esphome::Color(130, 255, 160);  // phosphor green
+      uint32_t now = millis();
+      const char *req = "Che tempo farà a Lugano domani?";
+      const char *resp = "Domani a Lugano sarà sereno con 24 gradi, qualche nuvola nel tardo pomeriggio.";
+      if (id(avatar_phase) == avatar::THINKING)
+        // request types from when we entered the phase; no response yet
+        avatar::draw_dialog(it, id(ui_font), req, "", phos, now, id(phase_t0), 0, 22.0f);
+      else if (id(avatar_phase) == avatar::REPLYING)
+        // request already typed (t0=0 => full); response types out, once
+        avatar::draw_dialog(it, id(ui_font), req, resp, phos, now, 0, id(phase_t0), 22.0f);
 
 touchscreen:
   - platform: sdl
@@ -29,4 +50,5 @@ touchscreen:
     on_touch:
       - lambda: |-
           id(avatar_phase) = (id(avatar_phase) + 1) % 9;
+          id(phase_t0) = millis();   // restart the demo typing on each phase change
           ESP_LOGI("avatar", "phase -> %d", id(avatar_phase));

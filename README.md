@@ -65,6 +65,23 @@ Animation is driven by **wall-clock time** (`millis()`), not a frame counter, so
 the speed is identical on the desktop emulator and the device (the device is just
 less smooth, not slower).
 
+## On-screen text & live colours
+
+- **Terminal text (STT/TTS).** While the assistant is thinking/replying, your
+  request and its answer are drawn over the avatar in a phosphor-CRT style
+  (VT323 font, soft glow), **typed out** character by character with a blinking
+  block cursor. The text comes from the upstream `text_request` / `text_response`
+  sensors; `avatar_draw.h::draw_dialog` handles word-wrap and the type-on effect.
+- **Live colours from Home Assistant** (no reflash). The package exposes:
+  - **`Avatar accent`** (RGB light) — recolours the whole avatar in real time.
+  - **`Avatar text`** (RGB light) — the text colour.
+  - **`Text colour`** (select) — `Match accent` (text follows the avatar) or
+    `Custom` (use the `Avatar text` picker).
+
+  These are virtual RGB lights (they drive no LED); their chosen colour is read
+  into a global and passed to `render()` / `draw_dialog()` each frame. The error
+  state stays amber regardless (deliberately, for a calm alert).
+
 ## Install
 
 Prerequisites: ESPHome (e.g. `uv venv && uv pip install esphome`).
