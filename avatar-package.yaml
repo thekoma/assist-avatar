@@ -1,0 +1,43 @@
+# assist-avatar — ESPHome package
+#
+# Renders an animated, cyberpunk-flavoured avatar on the ESP32-S3-Box-3 voice
+# assistant display. Add this package AFTER the official voice-assistant package;
+# it overrides ONLY each display page's lambda (so the avatar is drawn instead of
+# the static casita_* images) and bumps the refresh rate for animation. All
+# upstream logic — wake word, voice_assistant, the page-switching that already
+# handles idle/listening/thinking/replying/error/muted AND the connection states
+# (no-wifi / no-HA / initializing) — is kept untouched.
+#
+# The avatar phase is implied by which page upstream shows, so no extra wiring
+# (phase globals, wifi checks) is needed here.
+
+esphome:
+  includes:
+    - avatar_math.h
+    - avatar_draw.h
+    - avatar.h
+
+display:
+  - id: !extend s3_box_lcd   # extend the upstream display, don't create a new one
+    update_interval: 66ms    # animate (~15fps); upstream leaves this at "never"
+    pages:
+      - id: !extend idle_page
+        lambda: 'avatar::render(it, avatar::IDLE, millis());'
+      - id: !extend listening_page
+        lambda: 'avatar::render(it, avatar::LISTENING, millis());'
+      - id: !extend thinking_page
+        lambda: 'avatar::render(it, avatar::THINKING, millis());'
+      - id: !extend replying_page
+        lambda: 'avatar::render(it, avatar::REPLYING, millis());'
+      - id: !extend timer_finished_page
+        lambda: 'avatar::render(it, avatar::REPLYING, millis());'
+      - id: !extend error_page
+        lambda: 'avatar::render(it, avatar::ERROR, millis());'
+      - id: !extend no_ha_page
+        lambda: 'avatar::render(it, avatar::NO_HA, millis());'
+      - id: !extend no_wifi_page
+        lambda: 'avatar::render(it, avatar::NO_WIFI, millis());'
+      - id: !extend initializing_page
+        lambda: 'avatar::render(it, avatar::BOOTING, millis());'
+      - id: !extend muted_page
+        lambda: 'avatar::render(it, avatar::MUTED, millis());'

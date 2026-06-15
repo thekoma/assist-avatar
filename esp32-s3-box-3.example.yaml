@@ -1,0 +1,31 @@
+# Example device config for an ESP32-S3-Box-3 running the assist-avatar overlay.
+#
+# 1. Copy this file (e.g. `cp esp32-s3-box-3.example.yaml my-box.yaml`).
+# 2. Copy secrets.yaml.example to secrets.yaml and fill it in.
+# 3. Flash:  esphome run my-box.yaml   (USB for the first flash, OTA after).
+#
+# It keeps the official voice-assistant firmware untouched and only layers the
+# avatar on top, so wake word / voice / connection states all keep working.
+
+substitutions:
+  name: esp32-s3-box-3
+  friendly_name: Box 3
+
+packages:
+  # Official Nabu Casa voice-assistant firmware (kept intact, still upgradable):
+  esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
+  # The avatar overlay — overrides only the display rendering:
+  assist-avatar: !include avatar-package.yaml
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+api:
+  encryption:
+    key: !secret api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password

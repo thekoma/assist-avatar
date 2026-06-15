@@ -1,0 +1,32 @@
+esphome:
+  name: avatar-dev
+  includes:
+    - avatar_math.h
+    - avatar_draw.h
+    - avatar.h
+
+host:
+
+logger:
+
+globals:
+  - id: avatar_phase
+    type: int
+    initial_value: '0'
+
+display:
+  - platform: sdl
+    id: avatar_display
+    dimensions:
+      width: 320
+      height: 240
+    update_interval: 16ms  # ~60fps; smoothness only — animation speed is time-based
+    lambda: 'avatar::render(it, id(avatar_phase), millis());'
+
+touchscreen:
+  - platform: sdl
+    display: avatar_display
+    on_touch:
+      - lambda: |-
+          id(avatar_phase) = (id(avatar_phase) + 1) % 9;
+          ESP_LOGI("avatar", "phase -> %d", id(avatar_phase));

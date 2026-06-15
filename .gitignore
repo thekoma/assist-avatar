@@ -1,0 +1,8 @@
+.esphome/
+.venv/
+secrets.yaml
+*.bin
+__pycache__/
+.DS_Store
+# your own device configs (keep your name/key/secrets out of git)
+my-*.yaml
