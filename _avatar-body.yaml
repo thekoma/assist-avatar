@@ -1,0 +1,245 @@
+# assist-avatar — shared overlay body.
+#
+# Everything except the esphome: includes/libraries block, which differs
+# between the local and remote entrypoints. Do NOT include this file directly:
+# use avatar-package.yaml (local files) or avatar-remote.yaml (remote one-liner).
+
+font:
+  - file: "gfonts://VT323"   # classic CRT / phosphor terminal font
+    id: ui_font
+    size: 26
+    glyphsets: ["GF_Latin_Core"]
+
+# Record when the STT request / TTS response text arrives, so the page lambdas
+# can "type it out" from that moment.
+globals:
+  - id: text_req_t0
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: text_resp_t0
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: accent_color           # avatar accent colour, controllable from HA at runtime
+    type: esphome::Color
+    restore_value: false
+    initial_value: 'esphome::Color(0, 255, 217)'   # default cyan
+  - id: text_custom_color      # custom text colour (used when "Text colour" = Custom)
+    type: esphome::Color
+    restore_value: false
+    initial_value: 'esphome::Color(130, 255, 160)'  # default phosphor green
+
+# A virtual RGB light exposed to Home Assistant as a colour picker. It drives no
+# real LED — its chosen colour is read into `accent_color` and used to recolour
+# the avatar live (no reflash needed).
+output:
+  - platform: template
+    type: float
+    id: accent_out_r
+    write_action:
+      - lambda: ''   # colour is read via the light's on_state below
+  - platform: template
+    type: float
+    id: accent_out_g
+    write_action:
+      - lambda: ''
+  - platform: template
+    type: float
+    id: accent_out_b
+    write_action:
+      - lambda: ''
+  - platform: template
+    type: float
+    id: text_out_r
+    write_action:
+      - lambda: ''
+  - platform: template
+    type: float
+    id: text_out_g
+    write_action:
+      - lambda: ''
+  - platform: template
+    type: float
+    id: text_out_b
+    write_action:
+      - lambda: ''
+
+light:
+  - platform: rgb
+    name: "Avatar accent"
+    id: accent_light
+    red: accent_out_r
+    green: accent_out_g
+    blue: accent_out_b
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_state:
+      - lambda: |-
+          auto v = id(accent_light).remote_values;
+          if (v.get_state() > 0.0f)
+            id(accent_color) = esphome::Color((uint8_t) (v.get_red() * 255),
+                                              (uint8_t) (v.get_green() * 255),
+                                              (uint8_t) (v.get_blue() * 255));
+  - platform: rgb
+    name: "Avatar text"
+    id: text_light
+    red: text_out_r
+    green: text_out_g
+    blue: text_out_b
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_state:
+      - lambda: |-
+          auto v = id(text_light).remote_values;
+          if (v.get_state() > 0.0f)
+            id(text_custom_color) = esphome::Color((uint8_t) (v.get_red() * 255),
+                                                   (uint8_t) (v.get_green() * 255),
+                                                   (uint8_t) (v.get_blue() * 255));
+
+select:
+  - platform: template
+    name: "Text colour"
+    id: text_color_mode
+    icon: "mdi:format-color-text"
+    optimistic: true
+    restore_value: true
+    options:
+      - "Match accent"
+      - "Custom"
+    initial_option: "Custom"
+
+  # Per-state animation assignment — pick any catalogue animation for any state,
+  # live from Home Assistant. The option list is shared via a YAML anchor.
+  - platform: template
+    name: "Idle animation"
+    id: idle_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: &anim_options
+      - "Breathing ring"
+      - "Converging particles"
+      - "Orbits"
+      - "Waveform"
+      - "Amber pulse"
+      - "Dim ring"
+      - "Loading arc"
+      - "Sonar"
+      - "Scanning arc"
+      - "Siri orb"
+      - "Calm orb"
+      - "Sleeping orb"
+      - "Agitated orb"
+      - "Spike orb"
+      - "Happy orb"
+    initial_option: "Breathing ring"
+  - platform: template
+    name: "Listening animation"
+    id: listening_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Converging particles"
+  - platform: template
+    name: "Thinking animation"
+    id: thinking_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Orbits"
+  - platform: template
+    name: "Replying animation"
+    id: replying_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Waveform"
+  - platform: template
+    name: "Error animation"
+    id: error_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Amber pulse"
+  - platform: template
+    name: "Muted animation"
+    id: muted_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Dim ring"
+  - platform: template
+    name: "Booting animation"
+    id: booting_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Loading arc"
+  - platform: template
+    name: "No Wi-Fi animation"
+    id: no_wifi_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Sonar"
+  - platform: template
+    name: "Connecting animation"
+    id: no_ha_anim
+    icon: "mdi:animation"
+    optimistic: true
+    restore_value: true
+    options: *anim_options
+    initial_option: "Scanning arc"
+
+text_sensor:
+  - id: !extend text_request
+    on_value:
+      - lambda: 'id(text_req_t0) = millis();'
+  - id: !extend text_response
+    on_value:
+      - lambda: 'id(text_resp_t0) = millis();'
+
+display:
+  - id: !extend s3_box_lcd   # extend the upstream display, don't create a new one
+    update_interval: 66ms    # animate (~15fps); upstream leaves this at "never"
+    pages:
+      # Each page draws the animation assigned to its state (chosen live in HA),
+      # via render_anim(anim_from_name(<select>)). Thinking/Replying also overlay
+      # the typed STT/TTS text.
+      - id: !extend idle_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(idle_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend listening_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(listening_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend thinking_page
+        lambda: |-
+          avatar::render_anim(it, avatar::anim_from_name(id(thinking_anim).state.c_str()), millis(), id(accent_color));
+          auto txt = id(text_color_mode).state == "Match accent" ? id(accent_color)
+                                                                  : id(text_custom_color);
+          avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(), "",
+                              txt, millis(), id(text_req_t0), 0, 22.0f);
+      - id: !extend replying_page
+        lambda: |-
+          avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).state.c_str()), millis(), id(accent_color));
+          auto txt = id(text_color_mode).state == "Match accent" ? id(accent_color)
+                                                                  : id(text_custom_color);
+          avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(),
+                              id(text_response).state.c_str(),
+                              txt, millis(), 0, id(text_resp_t0), 22.0f);
+      - id: !extend timer_finished_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend error_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(error_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend no_ha_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_ha_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend no_wifi_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_wifi_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend initializing_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(booting_anim).state.c_str()), millis(), id(accent_color));'
+      - id: !extend muted_page
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(muted_anim).state.c_str()), millis(), id(accent_color));'

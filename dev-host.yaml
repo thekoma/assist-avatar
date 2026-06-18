@@ -1,9 +1,9 @@
 esphome:
   name: avatar-dev
   includes:
-    - avatar_math.h
-    - avatar_draw.h
-    - avatar.h
+    - src/avatar_math.h
+    - src/avatar_draw.h
+    - src/avatar.h
 
 host:
 
@@ -16,11 +16,8 @@ font:
     glyphsets: ["GF_Latin_Core"]
 
 globals:
-  - id: avatar_phase
+  - id: anim_index        # which animation of the catalogue we're auditioning
     type: int
-    initial_value: '0'
-  - id: phase_t0           # millis() when the phase last changed (drives the demo typing)
-    type: uint32_t
     initial_value: '0'
 
 display:
@@ -31,24 +28,16 @@ display:
       height: 240
     update_interval: 16ms  # ~60fps; smoothness only — animation speed is time-based
     lambda: |-
-      avatar::render(it, id(avatar_phase), millis());
-      // DEMO text (emulator only) to preview the terminal/phosphor styling.
-      auto phos = esphome::Color(130, 255, 160);  // phosphor green
-      uint32_t now = millis();
-      const char *req = "Che tempo farà a Lugano domani?";
-      const char *resp = "Domani a Lugano sarà sereno con 24 gradi, qualche nuvola nel tardo pomeriggio.";
-      if (id(avatar_phase) == avatar::THINKING)
-        // request types from when we entered the phase; no response yet
-        avatar::draw_dialog(it, id(ui_font), req, "", phos, now, id(phase_t0), 0, 22.0f);
-      else if (id(avatar_phase) == avatar::REPLYING)
-        // request already typed (t0=0 => full); response types out, once
-        avatar::draw_dialog(it, id(ui_font), req, resp, phos, now, 0, id(phase_t0), 22.0f);
+      // AUDITION MODE: click the window to cycle through the whole animation
+      // catalogue; each one is shown full-screen with its name at the top.
+      avatar::render_anim(it, id(anim_index), millis(), avatar::cyan());
+      avatar::print_centered(it, 6, id(ui_font), avatar::cyan(170),
+                             avatar::anim_name(id(anim_index)));
 
 touchscreen:
   - platform: sdl
     display: avatar_display
     on_touch:
       - lambda: |-
-          id(avatar_phase) = (id(avatar_phase) + 1) % 9;
-          id(phase_t0) = millis();   // restart the demo typing on each phase change
-          ESP_LOGI("avatar", "phase -> %d", id(avatar_phase));
+          id(anim_index) = (id(anim_index) + 1) % avatar::ANIM_COUNT;
+          ESP_LOGI("avatar", "anim -> %s", avatar::anim_name(id(anim_index)));

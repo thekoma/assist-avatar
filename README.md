@@ -84,28 +84,43 @@ less smooth, not slower).
 
 ## Install
 
+### Option A — remote, one line (recommended; works from the HA ESPHome dashboard)
+
+Add **one package line** to your device's YAML and flash. Nothing to copy:
+
+```yaml
+packages:
+  # the line your device already has (keep it):
+  esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
+  # add the avatar overlay (must come AFTER the line above):
+  assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@main
+```
+
+Keep your existing `name` / `api:` / `wifi:` exactly as they are, then **Install
+→ Wirelessly**. Pin a release by replacing `@main` with a tag. Done.
+
+> **Why `avatar-remote.yaml` and not `avatar-package.yaml`?** ESPHome resolves the
+> C++ headers in `includes:` relative to *your* YAML, not to a remote package
+> ([esphome#14583](https://github.com/esphome/esphome/issues/14583)), so a plain
+> github package can't ship its own headers. `avatar-remote.yaml` pulls this repo
+> in as a PlatformIO **library** (`esphome.libraries`) so the headers land on the
+> compiler include path; `library.json` keeps it header-only so nothing else is
+> built. If your first compile can't find `avatar.h`, use Option B.
+
+### Option B — local files
+
 Prerequisites: ESPHome (e.g. `uv venv && uv pip install esphome`).
 
-1. Clone this repo and enter it.
+1. Clone this repo and enter it (or copy `avatar-package.yaml`, `_avatar-body.yaml`
+   and the `src/` folder next to your device YAML — e.g. into HA's `/config/esphome/`).
 2. `cp secrets.yaml.example secrets.yaml` and fill it in (2.4 GHz Wi-Fi; generate
    an API key with `openssl rand -base64 32`).
 3. `cp esp32-s3-box-3.example.yaml my-box.yaml` and set `name` / `friendly_name`.
-4. First flash over USB, then over the air:
-   ```bash
-   esphome run my-box.yaml
-   ```
-5. In Home Assistant: add the auto-discovered **ESPHome** device, then assign it a
-   **Voice assistant pipeline** and keep **Wake word engine location = On device**.
-   Say **"Okay Nabu"** — the screen switches to the listening animation.
+4. First flash over USB, then over the air: `esphome run my-box.yaml`.
 
-> Using it from another config? Reference the package remotely:
-> ```yaml
-> packages:
->   esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
->   assist-avatar: github://thekoma/assist-avatar/avatar-package.yaml@main
-> ```
-> The simplest reliable setup is to keep your device YAML in the repo root next to
-> `avatar-package.yaml` and the `.h` files, as the example does.
+Then in Home Assistant: add the auto-discovered **ESPHome** device, assign it a
+**Voice assistant pipeline**, keep **Wake word engine location = On device**, and
+say **"Okay Nabu"** — the screen switches to the listening animation.
 
 ## Develop (desktop emulator — no flashing)
 
@@ -129,8 +144,8 @@ Click the window to cycle through all states. Edit any `.h` and re-run `./dev.sh
 The pure math and the render bounds are tested on the host (no hardware):
 
 ```bash
-c++ -std=c++17 -I. test/test_avatar_math.cpp -o /tmp/t && /tmp/t
-c++ -std=c++17 -Itest/shim -I. test/test_render.cpp -o /tmp/t && /tmp/t
+c++ -std=c++17 -Isrc test/test_avatar_math.cpp -o /tmp/t && /tmp/t
+c++ -std=c++17 -Itest/shim -Isrc test/test_render.cpp -o /tmp/t && /tmp/t
 ```
 
 `test_render.cpp` runs every state across a time sweep with a mock display that

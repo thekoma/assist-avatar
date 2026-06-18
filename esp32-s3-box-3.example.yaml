@@ -14,8 +14,11 @@ substitutions:
 packages:
   # Official Nabu Casa voice-assistant firmware (kept intact, still upgradable):
   esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
-  # The avatar overlay — overrides only the display rendering:
-  assist-avatar: !include avatar-package.yaml
+  # The avatar overlay — overrides only the display rendering.
+  # Remote, no files to copy (recommended — works from the HA dashboard):
+  assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@main
+  # Local alternative (clone the repo / copy the files next to this YAML):
+  #   assist-avatar: !include avatar-package.yaml
 
 esphome:
   name: ${name}

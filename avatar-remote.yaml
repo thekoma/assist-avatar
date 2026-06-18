@@ -1,0 +1,24 @@
+# assist-avatar — REMOTE entrypoint (one-line github:// install).
+#
+# Lets you add the avatar without copying any files, straight from the ESPHome
+# dashboard:
+#
+#   packages:
+#     esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
+#     assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@main
+#
+# How it works: ESPHome's `includes:` resolve relative to YOUR main YAML, not to a
+# remote package (esphome#14583), so a plain github package can't ship its own C++
+# headers. We work around that by pulling this repo in as a PlatformIO *library*
+# (via esphome.libraries) — PlatformIO puts src/avatar.h on the compiler include
+# path, and the angle-bracket include below finds it there. The repo's library.json
+# marks it as a header-only library so none of the test/tools .cpp get compiled.
+
+esphome:
+  libraries:
+    - "assist-avatar=https://github.com/thekoma/assist-avatar.git"
+  includes:
+    - <avatar.h>
+
+packages:
+  body: !include _avatar-body.yaml

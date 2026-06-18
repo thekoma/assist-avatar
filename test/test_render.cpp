@@ -37,6 +37,11 @@ int main() {
       avatar::render(d, phase, t);
     }
   }
+  for (int a = 0; a < avatar::ANIM_COUNT; ++a) {  // every animation in the catalogue
+    for (uint32_t t = 0; t < 30000; t += 13) {
+      avatar::render_anim(d, a, t);
+    }
+  }
   std::printf("render sweep: draws=%ld out_of_bounds=%ld\n", d.draws, d.oob);
   std::printf("x range [%d, %d], y range [%d, %d] (bounds 0..%d, 0..%d)\n",
               d.min_x, d.max_x, d.min_y, d.max_y, MockDisplay::W - 1, MockDisplay::H - 1);

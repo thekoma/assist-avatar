@@ -5,19 +5,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p assets
 TMP=$(mktemp -d)
-c++ -std=c++17 -Itest/shim -I. tools/gif_render.cpp -o "$TMP/gif_render"
+c++ -std=c++17 -Itest/shim -Isrc tools/gif_render.cpp -o "$TMP/gif_render"
 
-# name phase n_frames dt_ms   (fps = 1000/dt, durata = n*dt; scelte per buoni loop)
+# name anim_index n_frames dt_ms   (anim = catalogue index; fps = 1000/dt)
 STATES=(
-  "idle 0 80 100"
-  "listening 1 70 50"
-  "thinking 2 72 55"
-  "replying 3 60 50"
-  "error 4 50 50"
-  "muted 5 8 50"
-  "booting 6 32 50"
-  "no_wifi 7 32 50"
-  "no_ha 8 36 50"
+  "orb_siri 9 90 45"
+  "orb_calm 10 90 45"
+  "orb_sleeping 11 100 60"
+  "orb_agitated 12 90 40"
+  "orb_spike 13 90 45"
+  "orb_happy 14 90 45"
 )
 
 for s in "${STATES[@]}"; do

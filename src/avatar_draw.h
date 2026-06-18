@@ -243,4 +243,40 @@ void draw_dialog(D &it, F *font, const char *request, const char *response,
   draw_block(response, resp_t0, true, 4);
 }
 
+// Ambient bottom bar: a slow, blurred sine wave across the full width. The
+// vertical glow (a soft falloff above/below the curve) gives the "blurred"
+// look; `speed` is small for a calm drift, `blur` the softness in pixels.
+template<typename D>
+void draw_wave_bar(D &it, float y_center, float amp, esphome::Color color,
+                   uint32_t now_ms, float speed, int blur) {
+  const int W = it.get_width(), H = it.get_height();
+  const float t = (float) now_ms;
+  const float breathe = 0.7f + 0.3f * std::sin(t * 0.0006f);  // slow amplitude pulse
+  for (int x = 0; x < W; ++x) {
+    const float fx = (float) x;
+    const float env = std::sin((float) M_PI * x / W);  // taper towards the edges
+    // Three sines at different frequencies drifting at different rates: the
+    // shape morphs over time instead of just scrolling sideways.
+    float y = y_center + amp * breathe * env *
+              (0.6f * std::sin(fx * 0.035f - t * speed) +
+               0.3f * std::sin(fx * 0.060f + t * speed * 1.7f) +
+               0.2f * std::sin(fx * 0.017f - t * speed * 0.5f));
+    for (int dyi = -blur; dyi <= blur; ++dyi) {
+      int yy = (int) (y + dyi);
+      if (yy < 0 || yy >= H) continue;
+      float fall = 1.0f - std::fabs((float) dyi) / (blur + 1.0f);
+      it.draw_pixel_at(x, yy, scale(color, fall * fall * 0.7f));
+    }
+  }
+}
+
+// Print a string horizontally centred at row `y`, with the phosphor glow.
+template<typename D, typename F>
+void print_centered(D &it, int y, F *font, esphome::Color color, const char *s) {
+  if (!s || !s[0]) return;
+  int x1, y1, w, h;
+  it.get_text_bounds(0, 0, s, font, esphome::display::TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+  print_glow(it, (it.get_width() - w) / 2, y, font, color, s);
+}
+
 }  // namespace avatar

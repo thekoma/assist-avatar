@@ -4,7 +4,7 @@
 // of PPM frames, which an external tool (ffmpeg) assembles into an animated GIF.
 // This produces faithful previews without needing to screen-record the SDL window.
 //
-// Usage: gif_render <phase> <n_frames> <dt_ms> <out_dir>
+// Usage: gif_render <anim> <n_frames> <dt_ms> <out_dir>   (anim = catalogue index)
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -47,14 +47,14 @@ struct GifDisplay {
 };
 
 int main(int argc, char **argv) {
-  if (argc != 5) { std::fprintf(stderr, "usage: %s phase n_frames dt_ms out_dir\n", argv[0]); return 2; }
-  int phase = std::atoi(argv[1]);
+  if (argc != 5) { std::fprintf(stderr, "usage: %s anim n_frames dt_ms out_dir\n", argv[0]); return 2; }
+  int anim = std::atoi(argv[1]);
   int n = std::atoi(argv[2]);
   uint32_t dt = (uint32_t) std::atoi(argv[3]);
   std::string dir = argv[4];
   static GifDisplay d;
   for (int i = 0; i < n; ++i) {
-    avatar::render(d, phase, (uint32_t) i * dt);
+    avatar::render_anim(d, anim, (uint32_t) i * dt, avatar::cyan());
     char name[512];
     std::snprintf(name, sizeof(name), "%s/frame_%04d.ppm", dir.c_str(), i);
     d.write_ppm(name);
