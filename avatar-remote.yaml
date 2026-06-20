@@ -5,7 +5,11 @@
 #
 #   packages:
 #     esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
-#     assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@main
+#     assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@v0.3.1
+#
+# Pin a release tag (e.g. @v0.3.1), not @main: the library line below is pinned to
+# the SAME tag, so the YAML and the C++ are fetched from one commit (no skew). Each
+# release bumps both. @main also works but tracks whatever the latest release pins.
 #
 # How it works: ESPHome's `includes:` resolve relative to YOUR main YAML, not to a
 # remote package (esphome#14583), so a plain github package can't ship its own C++
@@ -16,7 +20,7 @@
 
 esphome:
   libraries:
-    - "assist-avatar=https://github.com/thekoma/assist-avatar.git"
+    - "assist-avatar=https://github.com/thekoma/assist-avatar.git#v0.3.1"
   includes:
     - <avatar.h>
 

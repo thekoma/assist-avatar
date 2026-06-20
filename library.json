@@ -1,6 +1,6 @@
 {
   "name": "assist-avatar",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Animated cyberpunk avatar overlay for the ESP32-S3-Box-3 voice assistant (ESPHome). Header-only render engine.",
   "keywords": "esphome, esp32, display, voice-assistant, avatar",
   "repository": {
