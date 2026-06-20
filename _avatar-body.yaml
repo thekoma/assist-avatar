@@ -213,33 +213,33 @@ display:
       # via render_anim(anim_from_name(<select>)). Thinking/Replying also overlay
       # the typed STT/TTS text.
       - id: !extend idle_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(idle_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(idle_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend listening_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(listening_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(listening_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend thinking_page
         lambda: |-
-          avatar::render_anim(it, avatar::anim_from_name(id(thinking_anim).state.c_str()), millis(), id(accent_color));
-          auto txt = id(text_color_mode).state == "Match accent" ? id(accent_color)
+          avatar::render_anim(it, avatar::anim_from_name(id(thinking_anim).current_option().c_str()), millis(), id(accent_color));
+          auto txt = id(text_color_mode).current_option() == "Match accent" ? id(accent_color)
                                                                   : id(text_custom_color);
           avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(), "",
                               txt, millis(), id(text_req_t0), 0, 22.0f);
       - id: !extend replying_page
         lambda: |-
-          avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).state.c_str()), millis(), id(accent_color));
-          auto txt = id(text_color_mode).state == "Match accent" ? id(accent_color)
+          avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).current_option().c_str()), millis(), id(accent_color));
+          auto txt = id(text_color_mode).current_option() == "Match accent" ? id(accent_color)
                                                                   : id(text_custom_color);
           avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(),
                               id(text_response).state.c_str(),
                               txt, millis(), 0, id(text_resp_t0), 22.0f);
       - id: !extend timer_finished_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(replying_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend error_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(error_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(error_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend no_ha_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_ha_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_ha_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend no_wifi_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_wifi_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(no_wifi_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend initializing_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(booting_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(booting_anim).current_option().c_str()), millis(), id(accent_color));'
       - id: !extend muted_page
-        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(muted_anim).state.c_str()), millis(), id(accent_color));'
+        lambda: 'avatar::render_anim(it, avatar::anim_from_name(id(muted_anim).current_option().c_str()), millis(), id(accent_color));'
