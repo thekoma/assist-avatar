@@ -3,6 +3,14 @@
 #include "avatar_math.h"
 #include "avatar_draw.h"
 
+// On device, draw_orb_siri's scratch buffers are placed in PSRAM via
+// esphome::RAMAllocator. ESPHome's generated esphome.h already pulls helpers.h
+// in, but include it explicitly (device-only) for robustness. The host shim
+// has no helpers.h, so this is guarded out and the host uses static arrays.
+#ifdef USE_ESP32
+#include "esphome/core/helpers.h"
+#endif
+
 namespace avatar {
 
 // Translate the official ESP32-S3-Box-3 voice_assistant phase ids into our
@@ -125,8 +133,25 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
   const float R = p.radius * (1.0f + p.breathe_amp * breath(now_ms, p.breathe_ms));
 
   static constexpr int BS = 132;                 // box side (~102 KB RGB16)
-  static uint16_t acc[BS * BS * 3];
-  for (int i = 0; i < BS * BS * 3; ++i) acc[i] = 0;
+  static constexpr int NBUF = BS * BS * 3;        // elements per scratch buffer
+  // The two big scratch buffers (acc + tmp, ~204 KB combined) must NOT live in
+  // the ESP32-S3's internal DRAM (.dram0.bss) -- they overflow dram0_0_seg and
+  // the firmware fails to link. On device, allocate them once from PSRAM via
+  // ESPHome's own RAMAllocator (the same allocator its display/audio components
+  // use). ALLOC_EXTERNAL forces PSRAM-only (no internal fallback), so the bytes
+  // can never re-enter internal DRAM; a failed alloc just skips the frame. On
+  // the host (no USE_ESP32, no helpers.h) keep the original plain static arrays.
+  // This runs on a single display task, so the magic-static init is uncontended.
+#ifdef USE_ESP32
+  static esphome::RAMAllocator<uint16_t> orb_alloc{esphome::RAMAllocator<uint16_t>::ALLOC_EXTERNAL};
+  static uint16_t *acc = orb_alloc.allocate(NBUF);
+  static uint16_t *tmp = orb_alloc.allocate(NBUF);
+  if (acc == nullptr || tmp == nullptr) return;  // PSRAM alloc failed: skip frame, no crash
+#else
+  static uint16_t acc[NBUF];                      // host (gif_render/test_render): plain DRAM
+  static uint16_t tmp[NBUF];
+#endif
+  for (int i = 0; i < NBUF; ++i) acc[i] = 0;
   const int bx0 = (int) cx - BS / 2, by0 = (int) cy - BS / 2;
 
   // ===== 1) LAYERED BLOBS: a few large soft radial gradients, splatted additively
@@ -184,7 +209,7 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
 
   // ===== 2) cheap separable 5-tap (1-2-2-2-1) blur for a buttery glow =========
   {
-    static uint16_t tmp[BS * BS * 3];
+    // tmp[] is declared at function scope above (PSRAM on device / static on host).
     auto cl = [](int v) { return v < 0 ? 0 : (v > BS - 1 ? BS - 1 : v); };
     for (int y = 0; y < BS; ++y) {
       int row = y * BS * 3;
