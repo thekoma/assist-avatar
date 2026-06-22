@@ -1,0 +1,10 @@
+manifest_version: 1
+id: amber_pulse
+name: "Amber pulse"
+entry:
+  header: animations/amber_pulse/amber_pulse.h
+  function: avatar::mod::amber_pulse::render
+colors: []
+speed: { min: 0.3, max: 2.0, default: 1.0 }
+variations: []
+phases: [error]

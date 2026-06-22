@@ -1,0 +1,83 @@
+# Avatar display-page overlay — include AFTER the voice-assistant package.
+#
+# Each upstream display page's lambda is REPLACED (via !extend) with a call into
+# the runtime state table populated by the `avatar:` component's codegen
+# (components/avatar/__init__.py to_code -> avatar::register_state). render_state
+# reads the minted anim-select / variation-select / speed-number / colour-output
+# for the phase and dispatches to the configured animation module.
+#
+# Thinking/Replying also overlay the STT/TTS dialog text, "typed out" over the
+# animation in a phosphor-CRT style (avatar::draw_dialog, from avatar_draw.h). The
+# text comes from the upstream text_request / text_response sensors; the *_t0
+# globals stamp when each arrives so the type-on starts from that moment. Text
+# colour is a fixed phosphor green (the per-state `<State> accent` controls recolour
+# the animations, not the dialog text).
+#
+# Page-id -> avatar::Phase mapping (avatar::IDLE etc. resolve via avatar_math.h,
+# included on the component header path through avatar_render_state.h):
+#   idle_page          -> IDLE       listening_page  -> LISTENING
+#   thinking_page      -> THINKING   replying_page   -> REPLYING
+#   timer_finished_page-> REPLYING   error_page      -> ERROR
+#   muted_page         -> MUTED      initializing_page-> BOOTING
+#   no_wifi_page       -> NO_WIFI    no_ha_page      -> NO_HA
+
+font:
+  - file: "gfonts://VT323"   # classic CRT / phosphor terminal font
+    id: ui_font
+    size: 26
+    glyphsets: ["GF_Latin_Core"]
+
+# Stamp when the STT request / TTS response text arrives, so the page lambdas can
+# "type it out" from that moment (a *_t0 of 0 means "show fully, not typing").
+globals:
+  - id: text_req_t0
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: text_resp_t0
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+
+text_sensor:
+  - id: !extend text_request
+    on_value:
+      - lambda: 'id(text_req_t0) = millis();'
+  - id: !extend text_response
+    on_value:
+      - lambda: 'id(text_resp_t0) = millis();'
+
+# update_interval 66ms ~= 15fps animation (upstream leaves it at "never").
+display:
+  - id: !extend s3_box_lcd
+    update_interval: 66ms
+    pages:
+      - id: !extend idle_page
+        lambda: 'avatar::render_state(it, avatar::IDLE, millis());'
+      - id: !extend listening_page
+        lambda: 'avatar::render_state(it, avatar::LISTENING, millis());'
+      - id: !extend thinking_page
+        lambda: |-
+          avatar::render_state(it, avatar::THINKING, millis());
+          avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(), "",
+                              esphome::Color(130, 255, 160), millis(),
+                              id(text_req_t0), 0, 22.0f);
+      - id: !extend replying_page
+        lambda: |-
+          avatar::render_state(it, avatar::REPLYING, millis());
+          avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(),
+                              id(text_response).state.c_str(),
+                              esphome::Color(130, 255, 160), millis(),
+                              0, id(text_resp_t0), 22.0f);
+      - id: !extend timer_finished_page
+        lambda: 'avatar::render_state(it, avatar::REPLYING, millis());'
+      - id: !extend error_page
+        lambda: 'avatar::render_state(it, avatar::ERROR, millis());'
+      - id: !extend muted_page
+        lambda: 'avatar::render_state(it, avatar::MUTED, millis());'
+      - id: !extend initializing_page
+        lambda: 'avatar::render_state(it, avatar::BOOTING, millis());'
+      - id: !extend no_wifi_page
+        lambda: 'avatar::render_state(it, avatar::NO_WIFI, millis());'
+      - id: !extend no_ha_page
+        lambda: 'avatar::render_state(it, avatar::NO_HA, millis());'

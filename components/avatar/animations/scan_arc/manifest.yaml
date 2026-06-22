@@ -1,0 +1,11 @@
+manifest_version: 1
+id: scan_arc
+name: "Scanning arc"
+entry:
+  header: animations/scan_arc/scan_arc.h
+  function: avatar::mod::scan_arc::render
+colors:
+  - { role: arc, name: "Arc", default: "#00FFD9" }
+speed: { min: 0.3, max: 2.0, default: 1.0 }
+variations: []
+phases: [no_ha]

@@ -1,0 +1,11 @@
+manifest_version: 1
+id: dim_ring
+name: "Dim ring"
+entry:
+  header: animations/dim_ring/dim_ring.h
+  function: avatar::mod::dim_ring::render
+colors:
+  - { role: ring, name: "Ring", default: "#00FFD9" }
+speed: { min: 0.3, max: 2.0, default: 1.0 }
+variations: []
+phases: [muted]

@@ -1,28 +1,32 @@
-# assist-avatar — REMOTE entrypoint (one-line github:// install).
+# assist-avatar — REMOTE entrypoint (one-line github:// install). v0.4.0+.
 #
-# Lets you add the avatar without copying any files, straight from the ESPHome
-# dashboard:
+# Add to your device YAML, AFTER the official voice-assistant factory package:
 #
 #   packages:
 #     esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
-#     assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@v0.3.1
+#     assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@v0.4.0
 #
-# Pin a release tag (e.g. @v0.3.1), not @main: the library line below is pinned to
-# the SAME tag, so the YAML and the C++ are fetched from one commit (no skew). Each
-# release bumps both. @main also works but tracks whatever the latest release pins.
+# then declare your per-state `avatar:` block (see the README / the example YAML).
 #
-# How it works: ESPHome's `includes:` resolve relative to YOUR main YAML, not to a
-# remote package (esphome#14583), so a plain github package can't ship its own C++
-# headers. We work around that by pulling this repo in as a PlatformIO *library*
-# (via esphome.libraries) — PlatformIO puts src/avatar.h on the compiler include
-# path, and the angle-bracket include below finds it there. The repo's library.json
-# marks it as a header-only library so none of the test/tools .cpp get compiled.
-
-esphome:
-  libraries:
-    - "assist-avatar=https://github.com/thekoma/assist-avatar.git#v0.3.1"
-  includes:
-    - <avatar.h>
+# What this does:
+#  - pulls the `avatar` external_component from this repo (the render engine +
+#    codegen that mints the per-state Home-Assistant controls), and
+#  - overlays the display pages (avatar-pages.yaml) so each assistant state is
+#    drawn by the avatar.
+#
+# Pin a release tag (e.g. @v0.4.0), not @main: the external_components `ref:` below
+# is pinned to the SAME tag, so the YAML, the page overlay and the C++ are fetched
+# from one commit (no skew). The nested `!include` resolves inside the fetched repo
+# (verified against ESPHome 2026.5.x); the page `!extend` targets exist because the
+# voice-assistant package is merged before this one.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/thekoma/assist-avatar.git
+      ref: v0.4.0
+      path: components
+    components: [avatar]
+    refresh: 1d
 
 packages:
-  body: !include _avatar-body.yaml
+  avatar_pages: !include avatar-pages.yaml

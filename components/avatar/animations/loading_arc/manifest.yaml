@@ -1,0 +1,11 @@
+manifest_version: 1
+id: loading_arc
+name: "Loading arc"
+entry:
+  header: animations/loading_arc/loading_arc.h
+  function: avatar::mod::loading_arc::render
+colors:
+  - { role: arc, name: "Arc", default: "#00FFD9" }
+speed: { min: 0.3, max: 2.0, default: 1.0 }
+variations: []
+phases: [booting]

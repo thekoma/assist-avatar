@@ -1,9 +1,11 @@
 esphome:
   name: avatar-dev
   includes:
-    - src/avatar_math.h
-    - src/avatar_draw.h
-    - src/avatar.h
+    - components/avatar/base/avatar_module.h
+    - components/avatar/animations
+    - components/avatar/base/avatar_math.h
+    - components/avatar/base/avatar_draw.h
+    - components/avatar/base/avatar.h
 
 host:
 

@@ -1,81 +1,12 @@
 #pragma once
-#include "esphome.h"
-#include "avatar_math.h"
-#include "avatar_draw.h"
-
-// On device, draw_orb_siri's scratch buffers are placed in PSRAM via
-// esphome::RAMAllocator. ESPHome's generated esphome.h already pulls helpers.h
-// in, but include it explicitly (device-only) for robustness. The host shim
-// has no helpers.h, so this is guarded out and the host uses static arrays.
-#ifdef USE_ESP32
-#include "esphome/core/helpers.h"
-#endif
+// orb — the orb family: 6 moods (siri/calm/sleeping/agitated/spike/happy), all
+// sharing one ribbon-based renderer and one layered-blob renderer. Each mood is
+// a preset; variation selects which preset (0=siri … 5=happy).
+#include "avatar_module.h"
 
 namespace avatar {
-
-// Translate the official ESP32-S3-Box-3 voice_assistant phase ids into our
-// avatar::Phase integers. The upstream config uses:
-//   idle=1, listening=2, thinking=3, replying=4,
-//   not_ready=10, error=11, muted=12, timer_finished=20
-// which do NOT line up with avatar::Phase (IDLE=0..MUTED=5), so we map here.
-inline int avatar_phase_from(int official) {
-  switch (official) {
-    case 2:  return LISTENING;  // voice_assist_listening_phase_id
-    case 3:  return THINKING;   // voice_assist_thinking_phase_id
-    case 4:  return REPLYING;   // voice_assist_replying_phase_id
-    case 11: return ERROR;      // voice_assist_error_phase_id
-    case 12: return MUTED;      // voice_assist_muted_phase_id
-    case 10: return NO_HA;      // not_ready -> "connecting to Home Assistant"
-    case 20: return REPLYING;   // timer_finished -> reuse the lively reply look
-    case 1:                     // voice_assist_idle_phase_id
-    default: return IDLE;
-  }
-}
-
-// Palette (RGB). Cyan/teal on black.
-inline esphome::Color cyan(uint8_t v = 255) { return esphome::Color(0, v, (uint8_t)(v * 0.85f)); }
-inline esphome::Color black() { return esphome::Color(0, 0, 0); }
-
-// ---- Animation catalog ------------------------------------------------------
-// Each entry is an independent animation "module" drawn by draw_anim(). States
-// are mapped to animations separately (default_anim / Home Assistant selects),
-// so ANY animation can be assigned to ANY state. To add one: append an enum
-// value, a name, and a case in draw_anim().
-enum Anim {
-  BREATHING_RING = 0, CONVERGING, ORBITS, WAVEFORM, AMBER_PULSE,
-  DIM_RING, LOADING_ARC, SONAR, SCAN_ARC,
-  ORB, CALM_ORB, SLEEPING_ORB, AGITATED_ORB, SPIKE_ORB, HAPPY_ORB,
-  ANIM_COUNT
-};
-
-inline const char *anim_name(int a) {
-  switch (a) {
-    case BREATHING_RING: return "Breathing ring";
-    case CONVERGING:     return "Converging particles";
-    case ORBITS:         return "Orbits";
-    case WAVEFORM:       return "Waveform";
-    case AMBER_PULSE:    return "Amber pulse";
-    case DIM_RING:       return "Dim ring";
-    case LOADING_ARC:    return "Loading arc";
-    case SONAR:          return "Sonar";
-    case SCAN_ARC:       return "Scanning arc";
-    case ORB:            return "Siri orb";
-    case CALM_ORB:       return "Calm orb";
-    case SLEEPING_ORB:   return "Sleeping orb";
-    case AGITATED_ORB:   return "Agitated orb";
-    case SPIKE_ORB:      return "Spike orb";
-    case HAPPY_ORB:      return "Happy orb";
-    default:             return "Breathing ring";
-  }
-}
-
-// Map a friendly name (e.g. from a Home Assistant select) back to an Anim.
-inline int anim_from_name(const char *n) {
-  if (n)
-    for (int a = 0; a < ANIM_COUNT; ++a)
-      if (std::strcmp(n, anim_name(a)) == 0) return a;
-  return BREATHING_RING;
-}
+namespace mod {
+namespace orb {
 
 // Apple-Siri-ish cyclic palette: teal -> blue -> purple -> magenta -> (teal).
 // `u` wraps; used by orbs whose colour is fixed (not the user accent).
@@ -130,27 +61,16 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
   const float t = (float) now_ms;
   const int W = it.get_width(), H = it.get_height();
   const float cx = W / 2.0f, cy = H / 2.0f;
-  const float R = p.radius * (1.0f + p.breathe_amp * breath(now_ms, p.breathe_ms));
+  const float R = p.radius * (1.0f + p.breathe_amp * avatar::breath(now_ms, p.breathe_ms));
 
   static constexpr int BS = 132;                 // box side (~102 KB RGB16)
   static constexpr int NBUF = BS * BS * 3;        // elements per scratch buffer
-  // The two big scratch buffers (acc + tmp, ~204 KB combined) must NOT live in
-  // the ESP32-S3's internal DRAM (.dram0.bss) -- they overflow dram0_0_seg and
-  // the firmware fails to link. On device, allocate them once from PSRAM via
-  // ESPHome's own RAMAllocator (the same allocator its display/audio components
-  // use). ALLOC_EXTERNAL forces PSRAM-only (no internal fallback), so the bytes
-  // can never re-enter internal DRAM; a failed alloc just skips the frame. On
-  // the host (no USE_ESP32, no helpers.h) keep the original plain static arrays.
-  // This runs on a single display task, so the magic-static init is uncontended.
-#ifdef USE_ESP32
-  static esphome::RAMAllocator<uint16_t> orb_alloc{esphome::RAMAllocator<uint16_t>::ALLOC_EXTERNAL};
-  static uint16_t *acc = orb_alloc.allocate(NBUF);
-  static uint16_t *tmp = orb_alloc.allocate(NBUF);
-  if (acc == nullptr || tmp == nullptr) return;  // PSRAM alloc failed: skip frame, no crash
-#else
-  static uint16_t acc[NBUF];                      // host (gif_render/test_render): plain DRAM
-  static uint16_t tmp[NBUF];
-#endif
+  // acc + tmp (~204 KB combined) live in PSRAM on device (scratch<> uses
+  // RAMAllocator EXTERNAL); a null return means PSRAM is exhausted -> skip frame.
+  // SLOT 0 vs 1 guarantees two DISTINCT buffers (aliasing would corrupt the blur).
+  uint16_t *acc = avatar::scratch<uint16_t, 0>(NBUF);
+  uint16_t *tmp = avatar::scratch<uint16_t, 1>(NBUF);
+  if (acc == nullptr || tmp == nullptr) return;
   for (int i = 0; i < NBUF; ++i) acc[i] = 0;
   const int bx0 = (int) cx - BS / 2, by0 = (int) cy - BS / 2;
 
@@ -209,7 +129,7 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
 
   // ===== 2) cheap separable 5-tap (1-2-2-2-1) blur for a buttery glow =========
   {
-    // tmp[] is declared at function scope above (PSRAM on device / static on host).
+    // tmp is declared at function scope above (heap-backed via scratch<> on host, PSRAM on device).
     auto cl = [](int v) { return v < 0 ? 0 : (v > BS - 1 ? BS - 1 : v); };
     for (int y = 0; y < BS; ++y) {
       int row = y * BS * 3;
@@ -250,7 +170,7 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
       if (r + g + b <= 28) continue;
       float dxf = (float) sx - cx;
       float dist = std::sqrt(dxf * dxf + dyf * dyf);
-      float m = 1.0f - smoothstep((dist - edge0) * einv);   // 1 inside, 0 past edge1
+      float m = 1.0f - avatar::smoothstep((dist - edge0) * einv);   // 1 inside, 0 past edge1
       if (m <= 0.0f) continue;
       r = (int) (r * m); g = (int) (g * m); b = (int) (b * m);
       if (r + g + b <= 28) continue;
@@ -267,7 +187,7 @@ void draw_orb(D &it, uint32_t now_ms, esphome::Color accent, const OrbParams &p)
   if (p.combo) { draw_orb_siri(it, now_ms, accent, p); return; }
   const float t = (float) now_ms;
   const float cx = it.get_width() / 2.0f, cy = it.get_height() / 2.0f;
-  const float R = p.radius * (1.0f + p.breathe_amp * breath(now_ms, p.breathe_ms));
+  const float R = p.radius * (1.0f + p.breathe_amp * avatar::breath(now_ms, p.breathe_ms));
   const float yaw = t * p.yaw_speed;
   const float cyw = std::cos(yaw), syw = std::sin(yaw);
   const float pitch = 0.4f * std::sin(t * 0.0003f);
@@ -305,15 +225,15 @@ void draw_orb(D &it, uint32_t now_ms, esphome::Color accent, const OrbParams &p)
       esphome::Color base = p.use_palette ? palette_siri(u) : accent;
       int sx = (int) (cx + x2), sy = (int) (cy + y3);
       if (i > 0) {  // glowing "silk" strand: bright core line + a dim 1px halo
-        esphome::Color core = scale(prevc, bf);
-        esphome::Color halo = scale(prevc, bf * 0.35f);
+        esphome::Color core = avatar::scale(prevc, bf);
+        esphome::Color halo = avatar::scale(prevc, bf * 0.35f);
         it.line((int) prevx, (int) prevy - 1, sx, sy - 1, halo);
         it.line((int) prevx, (int) prevy + 1, sx, sy + 1, halo);
         it.line((int) prevx, (int) prevy, sx, sy, core);
       }
       if (i < p.per_ring)
-        glow_disc(it, (float) sx, (float) sy, 0.2f + 0.5f * depth, 0.8f + 0.8f * depth,
-                  scale(base, bf));
+        avatar::glow_disc(it, (float) sx, (float) sy, 0.2f + 0.5f * depth, 0.8f + 0.8f * depth,
+                  avatar::scale(base, bf));
       prevx = sx; prevy = sy; prevc = base;
     }
   }
@@ -326,153 +246,28 @@ inline OrbParams orb_agitated() { return {4, 64, 46.0f, 0.00160f, 0.0030f, 5.0f,
 inline OrbParams orb_spike()    { return {4, 64, 38.0f, 0.00050f, 0.0011f, 2.0f,  9.0f, 8.0f, 22.0f, 0.0042f, 0.00040f, 0.04f,  3000.0f, 255, true,  30, false, 0}; }
 inline OrbParams orb_happy()    { return {4, 64, 44.0f, 0.00090f, 0.0016f, 4.0f, 18.0f, 0.0f,  0.0f, 0.0000f, 0.00060f, 0.16f,  1400.0f, 255, true,  40, false, 0}; }
 
-// Draw one animation. Time-based (`now_ms` = millis()) so speed is refresh-rate
-// independent; `accent` recolours every element (amber pulse stays amber). Does
-// NOT clear the screen, so overlays can be layered on top by the caller.
 template<typename D>
-void draw_anim(D &it, int anim, uint32_t now_ms, esphome::Color accent) {
-  const float cx = it.get_width() / 2.0f;
-  const float cy = it.get_height() / 2.0f;
-  auto ac = [&](uint8_t v) { return scale(accent, v / 255.0f); };  // accent at brightness v
-
-  switch (anim) {
-    case CONVERGING: {
-      // A continuous stream of glowing particles drawn inward toward a hot core,
-      // staggered + eased + faded so the loop has no visible reset.
-      glow_ring(it, cx, cy, 40.0f, 1.5f, 4.0f, ac(120));
-      const int n = 28;
-      float base = wrap01(now_ms, 3500.0f);
-      for (int i = 0; i < n; ++i) {
-        float p = base + (float) i / n;
-        if (p >= 1.0f) p -= 1.0f;
-        float e = smoothstep(p);
-        float px, py;
-        converge_point(i, n, cx, cy, 56.0f, e, px, py);
-        float fade = std::sin((float) M_PI * p);
-        uint8_t b = lerp_u8(40, 255, e);
-        glow_disc(it, px, py, 1.0f, 3.5f, ac((uint8_t) (b * fade)));
-      }
-      float corePulse = 0.65f + 0.35f * breath(now_ms, 1750.0f);
-      glow_disc(it, cx, cy, 2.5f, 10.0f, ac((uint8_t) (255 * corePulse)), 0.85f);
-      break;
-    }
-    case ORBITS: {
-      // Two slowly counter-rotating rings of glowing points with fading trails.
-      const int n = 10;
-      const int trail = 5;
-      float phaseA = (float) now_ms * 0.0008f;
-      float phaseB = -(float) now_ms * 0.0005f;
-      for (int i = 0; i < n; ++i) {
-        for (int t = 0; t < trail; ++t) {
-          float decay = 1.0f - 0.8f * (float) t / trail;
-          float ax, ay, bx, by;
-          orbit_point(i, n, cx, cy, 34.0f, phaseA - (float) t * 0.06f, ax, ay);
-          orbit_point(i, n, cx, cy, 52.0f, phaseB + (float) t * 0.05f, bx, by);
-          glow_disc(it, ax, ay, 2.4f, 4.5f, ac((uint8_t) (255 * decay)));
-          glow_disc(it, bx, by, 2.2f, 4.0f, ac((uint8_t) (215 * decay)));
-        }
-      }
-      break;
-    }
-    case WAVEFORM: {
-      // Horizontal energy burst: a glowing waveform, brightest at the centre.
-      float amp = 8.0f + 14.0f * breath(now_ms, 2000.0f);
-      int w = (int) it.get_width(), hgt = (int) it.get_height();
-      for (int x = 0; x < w; ++x) {
-        float env = std::sin((float) M_PI * x / w);
-        float y = cy + wave_y((float) x, now_ms, 0.05f, amp * env, 0.005f);
-        for (int dyi = -5; dyi <= 5; ++dyi) {
-          int yy = (int) (y + dyi);
-          if (yy < 0 || yy >= hgt) continue;
-          float h = 1.0f - std::fabs((float) dyi) / 6.0f;
-          if (h <= 0.0f) continue;
-          it.draw_pixel_at(x, yy, scale(ac(235), h * h * env));
-        }
-      }
-      break;
-    }
-    case AMBER_PULSE: {
-      // Soft amber pulse — gentle, never harsh red (stays amber, ignores accent).
-      float p = breath(now_ms, 2500.0f);
-      esphome::Color amber(255, (uint8_t) (140 + 60 * p), 0);
-      glow_ring(it, cx, cy, breath_radius(34.0f, 8.0f, now_ms, 2500.0f), 2.0f, 5.0f, amber);
-      break;
-    }
-    case DIM_RING: {
-      // Very dim, static glowing ring with a small slash.
-      glow_ring(it, cx, cy, 36.0f, 1.5f, 3.0f, ac(40));
-      it.line((int) (cx - 14), (int) (cy - 14), (int) (cx + 14), (int) (cy + 14), ac(70));
-      break;
-    }
-    case LOADING_ARC: {
-      // A faint ring with a bright arc sweeping round to fill it.
-      glow_ring(it, cx, cy, 36.0f, 1.5f, 3.0f, ac(45));
-      float p = wrap01(now_ms, 1600.0f);
-      glow_arc(it, cx, cy, 36.0f, 2.0f, 4.0f, ac(230), -(float) M_PI / 2.0f,
-               2.0f * (float) M_PI * p);
-      break;
-    }
-    case SONAR: {
-      // Concentric rings pulsing outward and fading (searching).
-      const int waves = 3;
-      for (int k = 0; k < waves; ++k) {
-        float p = wrap01(now_ms + (uint32_t) (k * 1600 / waves), 1600.0f);
-        float r = 6.0f + p * 44.0f;
-        glow_ring(it, cx, cy, r, 1.5f, 3.0f, ac((uint8_t) (200 * (1.0f - p))));
-      }
-      break;
-    }
-    case SCAN_ARC: {
-      // A faint ring with a bright arc scanning around it (linking).
-      glow_ring(it, cx, cy, 38.0f, 1.5f, 3.0f, ac(45));
-      float rot = (float) now_ms * 0.0035f;
-      glow_arc(it, cx, cy, 38.0f, 2.0f, 4.0f, ac(235), rot, 0.9f);
-      break;
-    }
-    case ORB:          draw_orb(it, now_ms, accent, orb_siri());     break;
-    case CALM_ORB:     draw_orb(it, now_ms, accent, orb_calm());     break;
-    case SLEEPING_ORB: draw_orb(it, now_ms, accent, orb_sleeping()); break;
-    case AGITATED_ORB: draw_orb(it, now_ms, accent, orb_agitated()); break;
-    case SPIKE_ORB:    draw_orb(it, now_ms, accent, orb_spike());    break;
-    case HAPPY_ORB:    draw_orb(it, now_ms, accent, orb_happy());    break;
-    case BREATHING_RING:
-    default: {
-      // Slow breathing ring (~8s per breath), sub-pixel radius.
-      float r = breath_radius(36.0f, 6.0f, now_ms, 8000.0f);
-      uint8_t b = lerp_u8(90, 200, breath(now_ms, 8000.0f));
-      glow_ring(it, cx, cy, r, 2.0f, 5.0f, ac(b));
-      break;
-    }
+void render(D &it, uint32_t now_ms, const avatar::ColorSet &cs, float speed, uint8_t variation) {
+  // The orb is palette-driven (use_palette=true on every preset), so it ignores
+  // cs for now — byte-identical to the current look. cs is reserved for a future
+  // deliberate visual rework (core/glow colours), not wired here.
+  // accent is passed through for the non-combo path's API; the presets set
+  // use_palette=true so accent is unused, matching today's rendering exactly.
+  // Scaling now_ms here makes every mood's draw_orb/draw_orb_siri math honour
+  // speed uniformly (no-op at speed=1.0 -> byte-identical).
+  now_ms = (uint32_t) ((float) now_ms * (speed > 0.0f ? speed : 1.0f));
+  esphome::Color accent = cs.n ? cs.primary() : esphome::Color(0, 255, (uint8_t)(255 * 0.85f));
+  switch (variation) {
+    case 1: draw_orb(it, now_ms, accent, orb_calm());     break;
+    case 2: draw_orb(it, now_ms, accent, orb_sleeping()); break;
+    case 3: draw_orb(it, now_ms, accent, orb_agitated()); break;
+    case 4: draw_orb(it, now_ms, accent, orb_spike());    break;
+    case 5: draw_orb(it, now_ms, accent, orb_happy());    break;
+    case 0:
+    default: draw_orb(it, now_ms, accent, orb_siri());    break;
   }
 }
 
-// Clear the screen and draw the given animation.
-template<typename D>
-void render_anim(D &it, int anim, uint32_t now_ms, esphome::Color accent = cyan()) {
-  it.fill(black());
-  draw_anim(it, anim, now_ms, accent);
-}
-
-// Default animation assigned to each assistant phase (overridable from HA).
-inline int default_anim(int phase) {
-  switch (phase) {
-    case LISTENING: return CONVERGING;
-    case THINKING:  return ORBITS;
-    case REPLYING:  return WAVEFORM;
-    case ERROR:     return AMBER_PULSE;
-    case MUTED:     return DIM_RING;
-    case BOOTING:   return LOADING_ARC;
-    case NO_WIFI:   return SONAR;
-    case NO_HA:     return SCAN_ARC;
-    case IDLE:
-    default:        return BREATHING_RING;
-  }
-}
-
-// Backward-compatible entry point: render a phase using its default animation.
-template<typename D>
-void render(D &it, int phase, uint32_t now_ms, esphome::Color accent = cyan()) {
-  render_anim(it, default_anim(phase), now_ms, accent);
-}
-
+}  // namespace orb
+}  // namespace mod
 }  // namespace avatar
