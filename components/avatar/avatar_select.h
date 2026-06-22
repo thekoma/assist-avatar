@@ -1,7 +1,9 @@
 #pragma once
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
+#include "esphome/core/hal.h"       // esphome::millis() for preview_trigger
 #include "esphome/components/select/select.h"
+#include "avatar_preview.h"         // avatar::preview_trigger
 
 namespace avatar {
 // A minimal HA-settable select: optimistic publish on control(). Its active_index()
@@ -11,6 +13,7 @@ namespace avatar {
 class AvatarSelect : public esphome::select::Select, public esphome::Component {
  public:
   void set_initial_index(size_t i) { this->initial_index_ = i; }
+  void set_phase_id(int p) { this->phase_id_ = p; }
   void setup() override {
     this->pref_ = this->make_entity_preference<size_t>();
     size_t index = this->initial_index_;          // first-boot default from the avatar: block
@@ -23,9 +26,13 @@ class AvatarSelect : public esphome::select::Select, public esphome::Component {
     this->publish_state(value);
     auto idx = this->index_of(value);
     if (idx.has_value()) { size_t i = idx.value(); this->pref_.save(&i); }
+    // Genuine HA-initiated change: arm a 2s preview of this state (no-op during
+    // the boot-settle window — see avatar_preview.h's time gate).
+    avatar::preview_trigger(this->phase_id_, esphome::millis());
   }
  protected:
   size_t initial_index_{0};
+  int phase_id_{-1};
   esphome::ESPPreferenceObject pref_;
 };
 }  // namespace avatar

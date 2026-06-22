@@ -24,6 +24,27 @@ inline esphome::Color palette_siri(float u) {
                         (uint8_t) (a[2] + (b[2] - a[2]) * tt));
 }
 
+// Wireframe particle-sphere palette (distinct from palette_siri): a 7-key cyclic
+// ramp teal -> cyan -> blue -> indigo -> purple -> magenta -> (back to teal),
+// returned as float RGB in 0..1 so the additive accumulation keeps full range.
+struct WireCol { float r, g, b; };
+inline WireCol palette_wireframe(float u) {
+  u -= std::floor(u);
+  static const WireCol k[7] = {
+    {0.12f, 0.89f, 0.77f},  // teal
+    {0.18f, 0.78f, 0.95f},  // cyan-blue
+    {0.20f, 0.45f, 0.98f},  // blue
+    {0.42f, 0.28f, 0.95f},  // indigo
+    {0.65f, 0.25f, 0.92f},  // purple
+    {0.95f, 0.32f, 0.85f},  // magenta
+    {0.12f, 0.89f, 0.77f},  // loop
+  };
+  float f = u * 6.0f; int i = (int) f; float t = f - i;
+  t = t * t * (3.0f - 2.0f * t);
+  const WireCol &a = k[i], &b = k[i + 1];
+  return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t};
+}
+
 // ---- Orb family -------------------------------------------------------------
 // The "orb" animations share one ribbon-based renderer; each mood is a preset.
 // Siri's orb reads as flowing silk because it is a few intertwined great-circle
@@ -180,6 +201,115 @@ void draw_orb_siri(D &it, uint32_t now_ms, esphome::Color accent, const OrbParam
   }
 }
 
+// ---- Wireframe orb: a rotating particle-sphere (mesh of glowing dots) --------
+// Port of the standalone tools/wireframe_preview.cpp: L meridians x P points form
+// a sphere whose longitude swirls with latitude (spiralling silk bands); the mesh
+// yaws + gently pitches, dots are depth-shaded (front much brighter), splatted
+// ADDITIVELY in the 7-key teal->magenta palette, with a pearlescent core flare and
+// a faint rim circle. Then a per-pixel PEAK-NORMALIZE tonemap preserves hue.
+// Palette-driven: ignores `accent` like the other orb moods.
+template<typename D>
+void draw_orb_wireframe(D &it, uint32_t now_ms, esphome::Color /*accent*/, const OrbParams & /*p*/) {
+  const float t = (float) now_ms;
+  const int W = it.get_width(), H = it.get_height();
+  const float cx = W / 2.0f, cy = H / 2.0f, R = 78.0f;
+  const int L = 54;          // meridians (curved bands of dots)
+  const int P = 78;          // points per meridian
+
+  // PSRAM scratch accumulator (NOT a stack/static float[H][W][3] -> DRAM blowup).
+  // A centred box wide enough to cover the sphere (diameter ~156 + flare/rim).
+  // Float weights are stored scaled by SCALE into uint16 (fractional precision),
+  // then divided back + peak-normalized in the composite. 200*200*3 u16 ~= 234 KB.
+  static constexpr int BS = 200;
+  static constexpr int NBUF = BS * BS * 3;
+  static constexpr float SCALE = 4096.0f;     // float weight -> uint16 fixed point
+  // SLOT 2: distinct from draw_orb_siri's SLOT 0/1 (different size; a shared slot
+  // would alias a smaller buffer -> out-of-bounds writes / host assert).
+  uint16_t *acc = avatar::scratch<uint16_t, 2>(NBUF);
+  if (acc == nullptr) return;                 // PSRAM exhausted -> skip frame
+  for (int i = 0; i < NBUF; ++i) acc[i] = 0;
+  const int bx0 = (int) cx - BS / 2, by0 = (int) cy - BS / 2;
+
+  // Additive splat (smooth quadratic falloff), mapped through the box offset.
+  auto splat = [&](float px, float py, float rad, WireCol c, float amp) {
+    int ri = (int) (rad + 1.0f);
+    float inv = 1.0f / (rad * rad);
+    int icx = (int) (px + 0.5f), icy = (int) (py + 0.5f);
+    for (int dy = -ri; dy <= ri; ++dy) {
+      int ay = icy - by0 + dy; if (ay < 0 || ay >= BS) continue;
+      for (int dx = -ri; dx <= ri; ++dx) {
+        int ax = icx - bx0 + dx; if (ax < 0 || ax >= BS) continue;
+        float fall = 1.0f - (float) (dx * dx + dy * dy) * inv;
+        if (fall <= 0.0f) continue;
+        float w = amp * fall * fall;
+        int o = (ay * BS + ax) * 3;
+        int vr = acc[o]   + (int) (c.r * w * SCALE);
+        int vg = acc[o+1] + (int) (c.g * w * SCALE);
+        int vb = acc[o+2] + (int) (c.b * w * SCALE);
+        acc[o]   = vr > 65535 ? 65535 : (uint16_t) vr;
+        acc[o+1] = vg > 65535 ? 65535 : (uint16_t) vg;
+        acc[o+2] = vb > 65535 ? 65535 : (uint16_t) vb;
+      }
+    }
+  };
+
+  float yaw = t * 0.00045f;
+  float cyw = std::cos(yaw), syw = std::sin(yaw);
+  float pitch = 0.22f * std::sin(t * 0.00026f);
+  float cpt = std::cos(pitch), spt = std::sin(pitch);
+  float twist = 1.6f + 0.5f * std::sin(t * 0.0003f);   // swirl of the mesh
+  float hue0 = t * 0.00004f;
+
+  for (int m = 0; m < L; ++m) {
+    float lon0 = 6.2831853f * m / L;
+    for (int pi = 0; pi <= P; ++pi) {
+      float lat = -1.5707963f + 3.1415926f * pi / P;
+      float clat = std::cos(lat), slat = std::sin(lat);
+      // swirl: longitude shifts with latitude -> spiralling silk bands
+      float lon = lon0 + twist * lat + t * 0.0006f;
+      float ux = clat * std::cos(lon), uy = slat, uz = clat * std::sin(lon);
+      // rotate: yaw (Y) then pitch (X)
+      float x1 = cyw * ux + syw * uz, z1 = -syw * ux + cyw * uz, y1 = uy;
+      float y2 = cpt * y1 - spt * z1, z2 = spt * y1 + cpt * z1;
+      float depth = (z2 + 1.0f) * 0.5f;               // 0 back .. 1 front
+      float px = cx + x1 * R, py = cy + y2 * R;
+      WireCol c = palette_wireframe(hue0 + (lon * 0.1591549f) + 0.18f * slat);
+      float bright = 0.10f + 0.95f * depth * depth;    // front dots much brighter
+      float rad = 0.9f + 0.9f * depth;
+      splat(px, py, rad, c, bright * 0.55f);
+    }
+  }
+
+  // bright pearlescent core flare (soft, near centre, slight drift)
+  float fx = cx + 6.0f * std::sin(t * 0.0007f), fy = cy + 4.0f * std::cos(t * 0.0009f);
+  splat(fx, fy, 26.0f, palette_wireframe(hue0 + 0.5f), 0.9f);
+  splat(fx, fy, 11.0f, WireCol{0.85f, 0.95f, 1.0f}, 1.1f);
+
+  // faint rim circle (the sphere's silhouette)
+  for (int a = 0; a < 720; ++a) {
+    float ang = 6.2831853f * a / 720.0f;
+    splat(cx + R * std::cos(ang), cy + R * std::sin(ang), 1.0f,
+          palette_wireframe(hue0 + ang * 0.1591549f), 0.18f);
+  }
+
+  // composite with a per-pixel peak-normalize tonemap that preserves hue.
+  for (int y = 0; y < BS; ++y) {
+    int sy = by0 + y; if (sy < 0 || sy >= H) continue;
+    for (int x = 0; x < BS; ++x) {
+      int sx = bx0 + x; if (sx < 0 || sx >= W) continue;
+      int o = (y * BS + x) * 3;
+      if (acc[o] == 0 && acc[o+1] == 0 && acc[o+2] == 0) continue;
+      float r = acc[o] / SCALE, g = acc[o+1] / SCALE, b = acc[o+2] / SCALE;
+      float peak = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (peak > 1.0f) { float k = 1.0f / peak; r *= k; g *= k; b *= k; }
+      int ir = (int) (r * 255.0f), ig = (int) (g * 255.0f), ib = (int) (b * 255.0f);
+      if (ir <= 0 && ig <= 0 && ib <= 0) continue;
+      if (ir > 255) ir = 255; if (ig > 255) ig = 255; if (ib > 255) ib = 255;
+      it.draw_pixel_at(sx, sy, esphome::Color((uint8_t) ir, (uint8_t) ig, (uint8_t) ib));
+    }
+  }
+}
+
 // Render a ribbon orb: `rings` tumbling great-circles of particles, each with a
 // travelling perpendicular wobble (the "silk"), depth-shaded. No central core.
 template<typename D>
@@ -263,6 +393,7 @@ void render(D &it, uint32_t now_ms, const avatar::ColorSet &cs, float speed, uin
     case 3: draw_orb(it, now_ms, accent, orb_agitated()); break;
     case 4: draw_orb(it, now_ms, accent, orb_spike());    break;
     case 5: draw_orb(it, now_ms, accent, orb_happy());    break;
+    case 6: draw_orb_wireframe(it, now_ms, accent, OrbParams{}); break;
     case 0:
     default: draw_orb(it, now_ms, accent, orb_siri());    break;
   }

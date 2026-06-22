@@ -1,4 +1,4 @@
-# Example device config for an ESP32-S3-Box-3 running the assist-avatar overlay (v0.4.0+).
+# Example device config for an ESP32-S3-Box-3 running the assist-avatar overlay (v0.5.0+).
 #
 # 1. Copy this file (e.g. `cp esp32-s3-box-3.example.yaml my-box.yaml`).
 # 2. Copy secrets.yaml.example to secrets.yaml and fill it in.
@@ -15,7 +15,7 @@ packages:
   # Official Nabu Casa voice-assistant firmware (kept intact, still upgradable):
   esphome.voice-assistant: github://esphome/wake-word-voice-assistants/esp32-s3-box-3/esp32-s3-box-3.factory.yaml@main
   # The avatar overlay — pulls the component + page overrides. Pin a release tag:
-  assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@v0.4.0
+  assist-avatar: github://thekoma/assist-avatar/avatar-remote.yaml@v0.5.0
   #
   # Local alternative (clone the repo / copy components/ + avatar-pages.yaml next to
   # this YAML): remove the line above and instead add, at the top level of this file:
@@ -38,19 +38,9 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# Per-state animation. Each state is just `animation: <id>`; the component
-# auto-mints the Home-Assistant controls — `<State> animation`, `<State> animation
-# speed`, `<State> animation variation` (where the animation has variations) and
-# `<State> accent` — and your choices PERSIST across reboot (the values below are
-# only the first-boot defaults). Catalogue: amber_pulse, breathing_ring, converging,
-# dim_ring, loading_arc, orb, orbits, scan_arc, sonar, waveform.
+# v0.5.0: the avatar: block is OPTIONAL. Empty = all 9 states use their default
+# animation + the full HA control set. Add per-state overrides only if you want a
+# non-default first-boot look, e.g.:
+#   thinking: { animation: orb, variation: calm, speed: 1.2 }
+#   idle:     { speed: 0.8, accent: "#00FFD9" }   # accent invalid on palette anims (orb/amber_pulse)
 avatar:
-  idle:      { animation: breathing_ring }
-  listening: { animation: converging }
-  thinking:  { animation: orb, variation: {} }   # orb is the only one with variations
-  replying:  { animation: waveform }
-  error:     { animation: amber_pulse }
-  muted:     { animation: dim_ring }
-  booting:   { animation: loading_arc }
-  no_wifi:   { animation: sonar }
-  no_ha:     { animation: scan_arc }

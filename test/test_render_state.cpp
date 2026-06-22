@@ -100,9 +100,9 @@ int main() {
       anim_sel.traits_set_options(opts);
       anim_sel.publish_state("anim0");
     }
-    // var_sel, speed_num, colors all null — render_state must handle gracefully.
+    // speed_num, colors all null — render_state must handle gracefully.
     avatar::AvatarColorOutput *no_colors[1] = {nullptr};
-    avatar::register_state(0, &anim_sel, nullptr, nullptr, no_colors, 0);
+    avatar::register_state(0, &anim_sel, nullptr, no_colors, 0);
 
     MockDisplay d;
     // Sweep timestamps — same idea as test_render.cpp.
@@ -115,6 +115,63 @@ int main() {
     }
     std::printf("Test 3 passed: configured phase renders with 0 OOB writes "
                 "(draws=%ld fills=%ld)\n", d.draws, d.fills);
+  }
+
+  // ---- Test 4: preview boot-gate / arm / override / self-clear ---------------
+  // Does NOT instantiate draw_preview_banner (template-only, never compiled on
+  // host). Exercises the boot-settle time gate + render_state override prologue.
+  //
+  // Boot guard is now a TIME GATE (preview_trigger ignores now_ms <
+  // AVATAR_BOOT_SETTLE_MS) instead of a "ready" flag: a boot/restore write_state
+  // lands at small millis() and so can never arm a preview.
+  {
+    // Register a configured phase at index 0 so the override path renders it.
+    avatar::AvatarSelect anim_sel;
+    {
+      std::vector<std::string> opts{"anim0"};
+      anim_sel.traits_set_options(opts);
+      anim_sel.publish_state("anim0");
+    }
+    avatar::AvatarColorOutput *no_colors[1] = {nullptr};
+    avatar::register_state(0, &anim_sel, nullptr, no_colors, 0);
+
+    // Boot gate: a trigger at t=0 (and anywhere inside the settle window) is a
+    // hard no-op — this is exactly the boot/restore write_state case.
+    avatar::g_preview = avatar::PreviewState{};  // reset
+    avatar::preview_trigger(0, 0);
+    assert(!avatar::g_preview.active && "trigger at boot (t=0) must be a no-op");
+    avatar::preview_trigger(0, avatar::AVATAR_BOOT_SETTLE_MS - 1);
+    assert(!avatar::g_preview.active &&
+           "trigger inside the boot-settle window must be a no-op");
+
+    // At/after the gate, a genuine change arms a 2s window for the given phase.
+    const uint32_t t_arm = avatar::AVATAR_BOOT_SETTLE_MS;  // first allowed instant
+    avatar::preview_trigger(0, t_arm);
+    assert(avatar::g_preview.active && "trigger at/after the boot gate must arm");
+    assert(avatar::g_preview.phase_id == 0);
+    assert(avatar::g_preview.until_ms == t_arm + avatar::AVATAR_PREVIEW_MS);
+
+    // A later trigger overrides (re-arms with the new phase and deadline).
+    const uint32_t t_arm2 = t_arm + 500;
+    avatar::preview_trigger(0, t_arm2);
+    assert(avatar::g_preview.active && avatar::g_preview.phase_id == 0);
+    assert(avatar::g_preview.until_ms == t_arm2 + avatar::AVATAR_PREVIEW_MS &&
+           "a later trigger must override the deadline");
+
+    // Render inside the window: stays active and overrides the page's own phase.
+    MockDisplay d;
+    avatar::render_state(d, 5, t_arm2 + 100);   // page phase 5, preview overrides to 0
+    assert(avatar::g_preview.active && "preview must persist within the 2s window");
+    assert(d.oob == 0);
+
+    // Render at/after the deadline: self-clears.
+    avatar::render_state(d, 5, t_arm2 + avatar::AVATAR_PREVIEW_MS + 1);
+    assert(!avatar::g_preview.active && "preview must self-clear after 2s");
+    assert(d.oob == 0);
+
+    // Reset so we leave global state clean.
+    avatar::g_preview = avatar::PreviewState{};
+    std::printf("Test 4 passed: preview boot-gates, arms, overrides, self-clears\n");
   }
 
   std::printf("all render_state smoke tests passed\n");

@@ -6,6 +6,9 @@ entry:
   function: avatar::mod::orbits::render
 colors:
   - { role: orbit, name: "Orbit", default: "#00FFD9" }
-speed: { min: 0.3, max: 2.0, default: 1.0 }
+speed: { min: 0.3, max: 10.0, default: 1.0 }
 variations: []
-phases: [thinking]
+# orbits is a selectable thinking alternative, NOT the thinking default (orb is,
+# claimed earlier in sorted order). Empty phases[] so it never claims a state
+# default — otherwise STATE_DEFAULT_ANIM would have a stale orb/orbits conflict.
+phases: []

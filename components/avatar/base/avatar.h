@@ -45,6 +45,7 @@ enum Anim {
   BREATHING_RING = 0, CONVERGING, ORBITS, WAVEFORM, AMBER_PULSE,
   DIM_RING, LOADING_ARC, SONAR, SCAN_ARC,
   ORB, CALM_ORB, SLEEPING_ORB, AGITATED_ORB, SPIKE_ORB, HAPPY_ORB,
+  WIREFRAME_ORB,
   ANIM_COUNT
 };
 
@@ -65,6 +66,7 @@ inline const char *anim_name(int a) {
     case AGITATED_ORB:   return "Agitated orb";
     case SPIKE_ORB:      return "Spike orb";
     case HAPPY_ORB:      return "Happy orb";
+    case WIREFRAME_ORB:  return "Wireframe orb";
     default:             return "Breathing ring";
   }
 }
@@ -97,6 +99,7 @@ void draw_anim(D &it, int anim, uint32_t now_ms, esphome::Color accent) {
     case AGITATED_ORB: avatar::mod::orb::render(it, now_ms, avatar::ColorSet::single(accent), 1.0f, 3); break;
     case SPIKE_ORB:    avatar::mod::orb::render(it, now_ms, avatar::ColorSet::single(accent), 1.0f, 4); break;
     case HAPPY_ORB:    avatar::mod::orb::render(it, now_ms, avatar::ColorSet::single(accent), 1.0f, 5); break;
+    case WIREFRAME_ORB: avatar::mod::orb::render(it, now_ms, avatar::ColorSet::single(accent), 1.0f, 6); break;
     case BREATHING_RING:
     default: {
       // Delegates to the breathing_ring module (the first extracted module).

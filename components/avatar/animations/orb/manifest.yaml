@@ -5,6 +5,6 @@ entry:
   header: animations/orb/orb.h
   function: avatar::mod::orb::render
 colors: []   # palette-driven today; core/glow colour customisation is a future visual rework
-speed: { min: 0.3, max: 2.0, default: 1.0 }
-variations: [siri, calm, sleeping, agitated, spike, happy]
+speed: { min: 0.3, max: 10.0, default: 1.0 }
+variations: [siri, calm, sleeping, agitated, spike, happy, wireframe]
 phases: [thinking]

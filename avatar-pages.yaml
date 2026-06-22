@@ -53,15 +53,20 @@ display:
     update_interval: 66ms
     pages:
       - id: !extend idle_page
-        lambda: 'avatar::render_state(it, avatar::IDLE, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::IDLE, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend listening_page
-        lambda: 'avatar::render_state(it, avatar::LISTENING, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::LISTENING, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend thinking_page
         lambda: |-
           avatar::render_state(it, avatar::THINKING, millis());
           avatar::draw_dialog(it, id(ui_font), id(text_request).state.c_str(), "",
                               esphome::Color(130, 255, 160), millis(),
                               id(text_req_t0), 0, 22.0f);
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend replying_page
         lambda: |-
           avatar::render_state(it, avatar::REPLYING, millis());
@@ -69,15 +74,28 @@ display:
                               id(text_response).state.c_str(),
                               esphome::Color(130, 255, 160), millis(),
                               0, id(text_resp_t0), 22.0f);
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend timer_finished_page
-        lambda: 'avatar::render_state(it, avatar::REPLYING, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::REPLYING, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend error_page
-        lambda: 'avatar::render_state(it, avatar::ERROR, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::ERROR, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend muted_page
-        lambda: 'avatar::render_state(it, avatar::MUTED, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::MUTED, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend initializing_page
-        lambda: 'avatar::render_state(it, avatar::BOOTING, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::BOOTING, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend no_wifi_page
-        lambda: 'avatar::render_state(it, avatar::NO_WIFI, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::NO_WIFI, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());
       - id: !extend no_ha_page
-        lambda: 'avatar::render_state(it, avatar::NO_HA, millis());'
+        lambda: |-
+          avatar::render_state(it, avatar::NO_HA, millis());
+          avatar::draw_preview_banner(it, id(ui_font), millis());

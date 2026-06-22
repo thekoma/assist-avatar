@@ -11,4 +11,7 @@
 namespace avatar {
 // ODR definition — one translation unit owns the table.
 StateEntry g_avatar_states[AVATAR_NUM_PHASES];
+// ODR definition for the preview subsystem (declared extern in avatar_preview.h,
+// pulled in via avatar_render_state.h). Zero-init: active=false.
+PreviewState g_preview;
 }  // namespace avatar
